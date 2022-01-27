@@ -468,6 +468,8 @@ impl Object {
             .head(&url)
             .headers(crate::get_headers().await?)
             .send()
+            .await?
+            .json()
             .await?;
         match result {
             GoogleResponse::Success(s) => Ok(s),
