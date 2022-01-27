@@ -457,6 +457,7 @@ impl Object {
         }
     }
 
+    /// Missing method to check if object exists
     pub async fn is_exists(bucket: &str, file_name: &str) -> crate::Result<bool> {
         let url = format!(
             "{}/b/{}/o/{}",
@@ -471,9 +472,9 @@ impl Object {
             .send()
             .await?;
 
-        let s = result.status();
+        let s = u16::from(result.status());
 
-        s >= 200 && s < 300
+        Ok(s >= 200 && s < 300)
     }
 
     /// The synchronous equivalent of `Object::read`.
