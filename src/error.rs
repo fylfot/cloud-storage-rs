@@ -5,17 +5,7 @@ pub enum Error {
     Google(GoogleErrorResponse),
     /// If another network error causes something to fail, this variant is used.
     Reqwest(reqwest::Error),
-    /// If we encounter a problem decoding the private key, this variant is used.
-    #[cfg(feature = "ring")]
-    Pem(pem::PemError),
-    /// If we encounter a problem parsing the private key, this variant is used.
-    #[cfg(feature = "ring")]
-    KeyRejected(ring::error::KeyRejected),
-    /// If we encounter a problem signing a request, this variant is used.
-    #[cfg(feature = "ring")]
-    Signing(ring::error::Unspecified),
     /// If we encouter a SSL error, for example an invalid certificate, this variant is used.
-    #[cfg(feature = "openssl")]
     Ssl(openssl::error::ErrorStack),
     /// If we have problems creating or parsing a json web token, this variant is used.
     Jwt(jsonwebtoken::errors::Error),
@@ -42,14 +32,7 @@ impl std::error::Error for Error {
         match self {
             Self::Google(e) => Some(e),
             Self::Reqwest(e) => Some(e),
-            #[cfg(feature = "openssl")]
             Self::Ssl(e) => Some(e),
-            #[cfg(feature = "ring")]
-            Self::Pem(e) => Some(e),
-            #[cfg(feature = "ring")]
-            Self::KeyRejected(e) => Some(e),
-            #[cfg(feature = "ring")]
-            Self::Signing(e) => Some(e),
             Self::Jwt(e) => Some(e),
             Self::Serialization(e) => Some(e),
             Self::Other(_) => None,
@@ -63,31 +46,9 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-#[cfg(feature = "openssl")]
 impl From<openssl::error::ErrorStack> for Error {
     fn from(err: openssl::error::ErrorStack) -> Self {
         Self::Ssl(err)
-    }
-}
-
-#[cfg(feature = "ring")]
-impl From<pem::PemError> for Error {
-    fn from(err: pem::PemError) -> Self {
-        Self::Pem(err)
-    }
-}
-
-#[cfg(feature = "ring")]
-impl From<ring::error::KeyRejected> for Error {
-    fn from(err: ring::error::KeyRejected) -> Self {
-        Self::KeyRejected(err)
-    }
-}
-
-#[cfg(feature = "ring")]
-impl From<ring::error::Unspecified> for Error {
-    fn from(err: ring::error::Unspecified) -> Self {
-        Self::Signing(err)
     }
 }
 
@@ -105,12 +66,6 @@ impl From<serde_json::error::Error> for Error {
 
 impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
-        Self::Other(err.to_string())
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
         Self::Other(err.to_string())
     }
 }
@@ -150,8 +105,7 @@ pub(crate) enum GoogleResponse<T> {
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename = "camelCase")]
 pub struct GoogleErrorResponse {
-    /// A container for the error information.
-    pub error: ErrorList,
+    error: ErrorList,
 }
 
 impl GoogleErrorResponse {
@@ -174,60 +128,35 @@ impl std::fmt::Display for GoogleErrorResponse {
     }
 }
 
-impl std::error::Error for GoogleErrorResponse {}
+impl std::error::Error for GoogleErrorResponse {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
 
-/// A container for the error information.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename = "camelCase")]
-pub struct ErrorList {
-    /// A container for the error details.
-    pub errors: Vec<GoogleError>,
-    /// An HTTP status code value, without the textual description.
-    ///
-    /// Example values include: 400 (Bad Request), 401 (Unauthorized), and 404 (Not Found).
-    pub code: u16,
-    /// Description of the error. Same as errors.message.
-    pub message: String,
+struct ErrorList {
+    errors: Vec<GoogleError>,
+    code: u16,
+    message: String,
 }
 
 /// Google Error structure
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename = "camelCase")]
 pub struct GoogleError {
-    /// The scope of the error. Example values include: global and push.
-    pub domain: String,
-    /// Example values include `invalid`, `invalidParameter`, and `required`.
-    pub reason: Reason,
-    /// Description of the error.
-    ///
-    /// Example values include `Invalid argument`, `Login required`, and `Required parameter:
-    /// project`.
-    pub message: String,
-    /// The location or part of the request that caused the error. Use with `location` to pinpoint
-    /// the error. For example, if you specify an invalid value for a parameter, the `locationType`
-    /// will be parameter and the location will be the name of the parameter.
-    ///
-    /// Example values include `header` and `parameter`.
-    pub location_type: Option<String>,
-    /// The specific item within the `locationType` that caused the error. For example, if you
-    /// specify an invalid value for a parameter, the `location` will be the name of the parameter.
-    ///
-    /// Example values include: `Authorization`, `project`, and `projection`.
-    pub location: Option<String>,
+    domain: String,
+    reason: Reason,
+    message: String,
+    location_type: Option<String>,
+    location: Option<String>,
 }
-
-impl std::fmt::Display for GoogleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for GoogleError {}
 
 impl GoogleError {
-    /// Check what was the reason of error
+    /// Check what was the reasons of error
     pub fn is_reason(&self, reason: &Reason) -> bool {
-        self.reason == *reason
+        &self.reason == reason
     }
 }
 
