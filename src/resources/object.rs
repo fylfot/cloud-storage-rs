@@ -457,24 +457,23 @@ impl Object {
         }
     }
 
-    pub async fn head(bucket: &str, file_name: &str) -> crate::Result<Self> {
+    pub async fn is_exists(bucket: &str, file_name: &str) -> crate::Result<bool> {
         let url = format!(
             "{}/b/{}/o/{}",
             crate::BASE_URL,
             percent_encode(bucket),
             percent_encode(file_name),
         );
-        let result: GoogleResponse<Self> = reqwest::Client::new()
-            .head(&url)
+
+        let result = reqwest::Client::new()
+            .get(&url)
             .headers(crate::get_headers().await?)
             .send()
-            .await?
-            .json()
             .await?;
-        match result {
-            GoogleResponse::Success(s) => Ok(s),
-            GoogleResponse::Error(e) => Err(e.into()),
-        }
+
+        let s = result.status();
+
+        s >= 200 && s < 300
     }
 
     /// The synchronous equivalent of `Object::read`.
